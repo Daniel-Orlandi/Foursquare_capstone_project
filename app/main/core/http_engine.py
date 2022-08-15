@@ -3,8 +3,8 @@ import httpx
 import asyncio
 from urllib.parse import urlparse
 
-from app.core import response_handler
-from app.utils.data_logger import Logger
+from main.core import response_handler
+from main.utils.data_logger import Logger
 
 
 class Request:
@@ -41,15 +41,18 @@ class Request:
     def __init__(self) -> None:        
         self.logger = Logger(logger_name=__name__).get_logger()
         self.data_dict = {}
-
+    
     def get_data_dict(self) -> dict:
         return self.data_dict
+
+    def set_data_dict(self, data_dict:dict)->None:
+        self.data_dict = data_dict
 
     @staticmethod
     def get_host(url) -> str:
         return urlparse(url).hostname
 
-    def sync_request(self, key, url: str) -> requests.Response:
+    def sync_request(self, key, url: str, timeout=1) -> requests.Response:
         """
         Parameters
         ----------
@@ -76,7 +79,7 @@ class Request:
         """
         try:
             with requests.Session() as session:
-                response = session.get(url)
+                response = session.get(url, timeout=timeout)
                 response.raise_for_status()
                 self.data_dict[key] = {'host': self.get_host(
                     str(response.url)), 'data': response_handler.json_response(response.content.decode())}
@@ -106,7 +109,7 @@ class Request:
         except requests.exceptions.RequestException as general_error:
             self.logger.error(f"Ops Something Else: {general_error}")
 
-    async def async_request(self, key, url: str) -> httpx.Response:
+    async def async_request(self, key, url: str, timeout=1) -> httpx.Response:
         """
         Parameters
         ----------
@@ -137,7 +140,7 @@ class Request:
         """
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.get(url)
+                response = await client.get(url, timeout=timeout)
                 response.raise_for_status()
                 self.data_dict[key] = {'host': self.get_host(
                     str(response.url)), 'data': response_handler.json_response(response.content.decode())}
@@ -159,7 +162,7 @@ class Request:
             self.logger.error(f"Timeout Error:{timeout_error}")
            
         except httpx.RequestError as request_error:
-            self.logger.error(f"Request erros: {request_error}")
+            self.logger.error(f"Request Error: {request_error}")
            
         except httpx.HTTPError as http_error:
             self.logger.error(f"Http Error: {http_error}")
@@ -170,7 +173,7 @@ class Request:
         except Exception as general_error:
             self.logger.error(f"Ops Something Else: {general_error}")
             
-    async def get(self, method: str = "sync"):
+    async def get(self, method: str = "sync", timeout=1):
         """
          Orchestrator for running either of the request method.
          Used chained coroutine architecture for compatbility with asyncio
@@ -203,7 +206,7 @@ class Request:
 
                 task_list = []
                 for id_locale, url in self.data_dict.items():
-                    result = self.async_request(id_locale, url)
+                    result = self.async_request(id_locale, url, timeout)
                     task_list.append(result)
 
                 await asyncio.gather(*task_list)
@@ -213,7 +216,7 @@ class Request:
                 self.logger.info("sync mode selected.")
 
                 for id_locale, url in self.data_dict.items():
-                    self.sync_request(id_locale, url)
+                    self.sync_request(id_locale, url, timeout)
                     self.logger.info("Done")
             
             else:
