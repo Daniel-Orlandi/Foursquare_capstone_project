@@ -13,18 +13,19 @@ class GeoLocData:
     self.text_search_main_url = "https://maps.googleapis.com/maps/api/place/textsearch/json?"
     self.geocode_main_url = "https://maps.googleapis.com/maps/api/geocode/json?"
   
+
   async def get_geolocation_data(self, data_getter:Request , request_dict:dict, timeout:int=1)->Request:
     try:
       data_getter.set_data_dict(data_dict = request_dict)
       await data_getter.get(method='async', timeout=timeout)
 
-      #Simple retry strategy
+      #Simple retry strategy for invalid requests.
       req_id = list(request_dict.keys())[0]      
-      if data_getter.get_data_dict()[req_id]['data']['status'] == 'INVALID_REQUEST':     
-        self.logger.warning('GOT A INVALID_REQUEST!')          
-        for attempt in range(4):
-          time.sleep(1)
-          data_getter.set_data_dict(request_dict)
+      if data_getter.get_data_dict()[req_id]['status'] == 'INVALID_REQUEST':     
+        self.logger.warning('GOT A INVALID_REQUEST!')
+        data_getter.set_data_dict(request_dict)          
+        for attempt in range(2): 
+          time.sleep(2) #just in case so info can be generated at google servers.                 
           self.logger.warning(f'retrying:\n{data_getter.get_data_dict()}')
           await data_getter.get(method='async', timeout=timeout)
     
@@ -34,28 +35,42 @@ class GeoLocData:
     else:
      return data_getter
   
+
   async def get_all_pages_geolocation_data_from_coord(self, data_getter:Request, request_dict:dict, timeout:int=1)->Request:    
     data_getter = await self.get_geolocation_data(data_getter, request_dict, timeout)
-    temp_data_dict = data_getter.get_data_dict()    
+    temp_data_dict = data_getter.get_data_dict()        
     req_id = list(temp_data_dict.keys())[0]
-
-    if 'next_page_token' in temp_data_dict[req_id]['data']:
+    
+    if 'next_page_token' in temp_data_dict[req_id]:
+      '''
+      This recursive step is only triggered if next_page_toke is present in response.
+      '''
       self.logger.info('Getting next page data.')
-      pagetoken = temp_data_dict[req_id]['data']['next_page_token']
+      # Necessary so next_page_token can be generated at google servers.
+      time.sleep(2)      
+      pagetoken = temp_data_dict[req_id]['next_page_token']
+      # recursion_data_dict will be of format pagetoken: url+pagetoken
       recursion_data_dict = self.build_query_dict(pagetoken=pagetoken, req_id=pagetoken)
-      data_getter = await self.get_geolocation_data(data_getter, recursion_data_dict, timeout)
+      # Recursive call      
+      data_getter = await self.get_all_pages_geolocation_data_from_coord(data_getter, recursion_data_dict, timeout)
       recursion_data_dict = data_getter.get_data_dict()
+      # Get request_dict from get_all_pages_geolocation_data_from_coord
+      # Merge those dicts and stores them in data_getter object.
       temp_data_dict = dict(chain(temp_data_dict.items(), recursion_data_dict.items()))
       data_getter.set_data_dict(temp_data_dict)
-
     self.logger.info('Success.')
     return data_getter  
 
-  async def bulk_get_all_data_from_coord(self, places_coord_dict:dict,type='restaurant', timeout=10) -> list:
+
+  async def bulk_get_all_data_from_coord(self, data_getter, request_dict:dict, timeout=10) -> list:
     task_list = []
-    for request_id, coord in places_coord_dict.items():
-        result = await self.get_all_pages_geolocation_data_from_coord(lat=coord[0], lon=coord[1], type=type, request_identification=request_id, timeout=timeout)
-        task_list.append(result)
+    for _, request_value in request_dict.items():
+        self.logger.info(f"getting_data from:{request_value}")        
+        result = await self.get_all_pages_geolocation_data_from_coord(data_getter=data_getter,request_dict=request_value, timeout=timeout)
+        task_list.append(result) 
+        self.logger.info('Sucess!')   
+    return task_list
+
 
   def build_query_dict(self,
                       query:str=None, 
@@ -80,11 +95,13 @@ class GeoLocData:
       
       return {req_id:url}
 
+
   @staticmethod
   def get_bounding_box(data_dict:dict)->list:
-    centroid = data_dict['data']['results'][0]['geometry']['location']
-    b_box = data_dict['data']['results'][0]['geometry']['viewport']
+    centroid = data_dict['results'][0]['geometry']['location']
+    b_box = data_dict['results'][0]['geometry']['viewport']
     return [b_box, centroid]
+
 
   @staticmethod
   def build_search_grid(upper_right:list, lower_left:list, resolution:int=10):  
@@ -93,28 +110,4 @@ class GeoLocData:
     x_axis = numpy.arange(lower_left[1], upper_right[1], x_axis_step)  
     y_axis = numpy.arange(lower_left[0], upper_right[0], y_axis_step)      
     x_axis, y_axis = numpy.meshgrid(x_axis, y_axis, sparse=True)
-    return x_axis, y_axis
-
-  # async def get_geolocation_data_from_coord(self,                                           
-  #                                           lat:str=None,
-  #                                           lon:str=None,
-  #                                           type:str=None,
-  #                                           radius:int=50000,
-  #                                           pagetoken:str=None,
-  #                                           request_identification:str='test',
-  #                                           timeout=1)->dict:
-  #   try:
-  #   if pagetoken:            
-  #     url =self.text_search_main_url+f"&pagetoken={pagetoken}&key={self.api_key}"
-      
-  #   else:
-  #     url = self.text_search_main_url+f"&location={lat}%2C{lon}&radius={radius}&type={type}&key={self.api_key}"
-    
-  #   data_getter = Request()
-  #   data_getter.set_data_dict({request_identification:url})
-  #   await data_getter.get(method='async', timeout=timeout)    
-
-      
-
-  #   self.logger.info('Success.')
-  #   return data_getter.get_data_dict()
+    return x_axis, y_axis 

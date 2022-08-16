@@ -81,16 +81,14 @@ class Request:
             with requests.Session() as session:
                 response = session.get(url, timeout=timeout)
                 response.raise_for_status()
-                self.data_dict[key] = {'host': self.get_host(
-                    str(response.url)), 'data': response_handler.json_response(response.content.decode())}
+                self.data_dict[key] = response_handler.json_response(response.content.decode())
                 return response.status_code
 
         except ValueError as not_json_error:
             self.logger.warning(
                 f"Warning: {not_json_error}. trying to read response as xml")
 
-            self.data_dict[key] = {'host': self.get_host(
-                str(response.url)), 'data': response_handler.xml_response(response.content)}
+            self.data_dict[key] = response_handler.xml_response(response.content)
 
             self.logger.warning(
                 f"Warning: read response as xml")
@@ -142,15 +140,13 @@ class Request:
             async with httpx.AsyncClient() as client:
                 response = await client.get(url, timeout=timeout)
                 response.raise_for_status()
-                self.data_dict[key] = {'host': self.get_host(
-                    str(response.url)), 'data': response_handler.json_response(response.content.decode())}
+                self.data_dict[key] = response_handler.json_response(response.content.decode())
                 return response.status_code
 
         except ValueError as not_json_error:
             self.logger.warning(f"Warning: {not_json_error}. trying to read response as xml")
 
-            self.data_dict[key] = {'host': self.get_host(
-                str(response.url)), 'data': response_handler.xml_response(response.content)}
+            self.data_dict[key] = response_handler.xml_response(response.content)
 
             self.logger.warning(f"Warning: read response as xml")
             return response.status_code        
