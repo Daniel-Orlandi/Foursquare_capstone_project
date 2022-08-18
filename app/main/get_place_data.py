@@ -8,7 +8,7 @@ from main.core.geodata import GeoLocData
 from main.core.http_engine import Request
 from main.utils.data_logger import Logger
 
-async def run(query:str, req_id:str,type:str, resolution=5, timeout=1) -> list[Request]:
+async def run(query:str, type:str, req_id:str='Test', resolution=5, radius=50000, timeout=1) -> list[Request]:
     try:
         logger = Logger(logger_name=__name__).get_logger()
 
@@ -20,7 +20,7 @@ async def run(query:str, req_id:str,type:str, resolution=5, timeout=1) -> list[R
         my_data_getter = Request()
 
         logger.info('Requesting location lat/lon and centroid.')
-        request_dict = my_location.build_query_dict(query=query, req_id=req_id)   
+        request_dict = my_location.build_query_dict(query=query,req_id=req_id)   
         results = await my_location.get_geolocation_data(my_data_getter, request_dict, timeout=timeout)   
         positions = my_location.get_bounding_box(results.get_data_dict()[req_id])
         b_box = positions[0]
@@ -39,13 +39,20 @@ async def run(query:str, req_id:str,type:str, resolution=5, timeout=1) -> list[R
         indexer = 1
         for position in numpy.nditer(positions, flags=['external_loop'], order='F'):
             temp_data_dict = {}
-            temp_data_dict[f"req_{indexer}"] = my_location.build_query_dict(lat=position[0], lon=position[1], type=type, req_id=indexer)
+            temp_data_dict[f"req_{indexer}"] = my_location.build_query_dict(lat=position[0], lon=position[1], radius=radius, type=type, req_id=indexer)
             positions_dict= dict(chain(positions_dict.items(), temp_data_dict.items()))            
             indexer += 1
         logger.info(f'Final request dict:\n {positions_dict}')
         logger.info(f'Starting bulk request')
-        results = await my_location.bulk_get_all_data_from_coord(data_getter=my_data_getter, request_dict=positions_dict, timeout=timeout)
+        results = await my_location.bulk_get_all_data_from_coord(request_dict=positions_dict, timeout=timeout)
         results = [result.get_data_dict() for result in results]
+
+        temp_list = []
+        for each_req in results:             
+            for _, page in each_req.items():                
+                    [temp_list.append(item) for item in page['results']]
+
+        results=temp_list
         logger.info(f'Success.')
 
     except Exception as general_error:

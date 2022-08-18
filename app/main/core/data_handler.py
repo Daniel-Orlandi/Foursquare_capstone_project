@@ -2,13 +2,17 @@ import pandas
 import sqlalchemy
 
 class DataHandler:
+  @staticmethod
+  def add_data_to_db(df:pandas.DataFrame, **kwargs):
+    df.to_sql(**kwargs)
+  
+  @staticmethod
+  def get_data_from_db(query:str, con, **kwargs):
+    return pandas.read_sql_query(query, con, **kwargs)
 
   @staticmethod
-  def dict_list_to_dataframe(data_dict_list:list, **kwargs)->list:
-    df_list=[]
-    for key, each_data_dict in data_dict_list.items():
-      df_list.append(pandas.DataFrame.from_dict(each_data_dict, **kwargs))
-    return pandas.DataFrame.from_dict(df_list)
+  def dict_list_to_dataframe(data_dict_list:list, **kwargs)->pandas.DataFrame:
+    return pandas.DataFrame.from_dict(data_dict_list)
   
   @staticmethod
   def concat_dataframe_list(df_list:list)->pandas.DataFrame:

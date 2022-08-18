@@ -62,13 +62,14 @@ class GeoLocData:
     return data_getter  
 
 
-  async def bulk_get_all_data_from_coord(self, data_getter, request_dict:dict, timeout=10) -> list:
+  async def bulk_get_all_data_from_coord(self, request_dict:dict, timeout=10) -> list:
     task_list = []
     for _, request_value in request_dict.items():
+        temp_data_getter = Request()
         self.logger.info(f"getting_data from:{request_value}")        
-        result = await self.get_all_pages_geolocation_data_from_coord(data_getter=data_getter,request_dict=request_value, timeout=timeout)
-        task_list.append(result) 
-        self.logger.info('Sucess!')   
+        result = await self.get_all_pages_geolocation_data_from_coord(data_getter=temp_data_getter,request_dict=request_value, timeout=timeout)
+        task_list.append(result)     
+    self.logger.info('Sucess!')   
     return task_list
 
 
