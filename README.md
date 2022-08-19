@@ -26,7 +26,6 @@ Code for this step can also be found on:
 * In the project's main folder run:
 ```
 docker-compose up
-}
 ```
 all dependencies will be automaticaly installed
 * You will also need a google places api token, its free for a number of request.
